@@ -2473,6 +2473,22 @@
   /* composer 有 64px 下边距 + papers-bottom 4px 上边距 → 负 margin 上拉贴近 chat，再与下方内容拉开 */
   .papers-recent{ display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -46px 0 36px; }
   .papers-recent-label{ font-size: 12.5px; color: var(--muted-2); flex-shrink: 0; }
+  /* 最近搜索 · 搜索框聚焦下拉（地址栏式）。composer 提层级，避免被底部高热论文模块（带 transform，自成层叠上下文）遮挡 */
+  .papers-composer{ position: relative; z-index: 5; }
+  .prc-dd{ position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 50; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 44px -12px rgba(26,35,50,.30); overflow: hidden; padding: 5px; max-height: 330px; overflow-y: auto; }
+  .prc-dd[hidden]{ display: none; }
+  .prc-dd-head{ display: flex; align-items: center; justify-content: space-between; padding: 9px 12px 7px; font-size: 11.5px; color: var(--muted-2); }
+  .prc-dd-clear{ border: none; background: none; color: var(--muted-2); font-size: 11.5px; cursor: pointer; font-family: var(--sans); padding: 2px 4px; border-radius: 5px; }
+  .prc-dd-clear:hover{ color: var(--notification); }
+  .prc-dd-item{ display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+  .prc-dd-item:hover, .prc-dd-item.active{ background: var(--bg-soft); }
+  .prc-dd-item .prc-clock{ width: 14px; height: 14px; opacity: .5; flex-shrink: 0; }
+  .prc-dd-q{ flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prc-dd-q mark{ background: rgba(21,84,168,.14); color: var(--accent); border-radius: 3px; padding: 0 1px; }
+  .prc-dd-x{ flex-shrink: 0; border: none; background: none; color: var(--muted-2); cursor: pointer; display: inline-flex; padding: 3px; border-radius: 6px; opacity: 0; }
+  .prc-dd-item:hover .prc-dd-x, .prc-dd-item.active .prc-dd-x{ opacity: 1; }
+  .prc-dd-x:hover{ color: var(--notification); background: var(--paper); }
+  .prc-dd-x svg{ width: 14px; height: 14px; }
   .papers-recent-chip{
     display: inline-flex; align-items: center; gap: 6px;
     max-width: 100%;
@@ -5318,8 +5334,44 @@ window.papersToast = function(msg, type){
     inputArea.innerHTML = '<textarea placeholder="输入研究主题或搜索要求……"></textarea>';
     const ta = inputArea.querySelector('textarea');
     ta.value = state.search.text;
-    ta.addEventListener('input', () => { state.search.text = ta.value; updateSubmit(); });
-    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); doSearchSubmit(); } });
+    // 最近搜索 · 聚焦下拉（地址栏式）：聚焦露出最近搜索，输入实时过滤，↑↓ 选择，Enter 回填，点击仅回填不直搜
+    const composer = inputArea.closest('.papers-composer') || inputArea.parentElement;
+    let dd = composer.querySelector('#prc-dd');
+    if (!dd){ dd = document.createElement('div'); dd.id = 'prc-dd'; dd.className = 'prc-dd'; dd.hidden = true; composer.appendChild(dd); }
+    let ddActive = -1;
+    const clockSvg = '<svg class="prc-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15.5 14"/></svg>';
+    const hi = (q, v) => { if (!v) return esc(q); const i = q.toLowerCase().indexOf(v); if (i < 0) return esc(q); return esc(q.slice(0, i)) + '<mark>' + esc(q.slice(i, i + v.length)) + '</mark>' + esc(q.slice(i + v.length)); };
+    const ddItems = () => [].slice.call(dd.querySelectorAll('.prc-dd-item'));
+    const setActive = n => { const its = ddItems(); ddActive = n; its.forEach((el, i) => el.classList.toggle('active', i === n)); if (its[n]) its[n].scrollIntoView({ block:'nearest' }); };
+    const pick = q => { ta.value = q; state.search.text = q; updateSubmit(); dd.hidden = true; ddActive = -1; ta.focus(); try { ta.setSelectionRange(q.length, q.length); } catch(_){} };
+    const buildDD = () => {
+      const v = ta.value.trim().toLowerCase();
+      const all = state.search.history;
+      const list = (v ? all.filter(q => q.toLowerCase().includes(v) && q.toLowerCase() !== v) : all).slice(0, 8);
+      if (!list.length){ dd.hidden = true; dd.innerHTML = ''; ddActive = -1; return; }
+      ddActive = -1;
+      dd.innerHTML = '<div class="prc-dd-head"><span>最近搜索</span><button class="prc-dd-clear" type="button">清空全部</button></div>' +
+        list.map(q => '<div class="prc-dd-item" data-q="' + esc(q) + '" title="' + esc(q) + '">' + clockSvg + '<span class="prc-dd-q">' + hi(q, v) + '</span><button class="prc-dd-x" type="button" aria-label="删除该搜索记录">' + IC.x + '</button></div>').join('');
+      dd.hidden = false;
+      dd.querySelector('.prc-dd-clear').addEventListener('mousedown', e => { e.preventDefault(); state.search.history.length = 0; dd.hidden = true; });
+      dd.querySelectorAll('.prc-dd-item').forEach(it => {
+        it.addEventListener('mousedown', e => { if (e.target.closest('.prc-dd-x')) return; e.preventDefault(); pick(it.dataset.q); });
+        it.querySelector('.prc-dd-x').addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); const q = it.dataset.q; const i = state.search.history.indexOf(q); if (i > -1) state.search.history.splice(i, 1); buildDD(); });
+      });
+    };
+    ta.addEventListener('focus', buildDD);
+    ta.addEventListener('input', () => { state.search.text = ta.value; updateSubmit(); buildDD(); });
+    ta.addEventListener('blur', () => { setTimeout(() => { dd.hidden = true; }, 120); });
+    ta.addEventListener('keydown', e => {
+      if (!dd.hidden){
+        const its = ddItems();
+        if (e.key === 'ArrowDown'){ e.preventDefault(); setActive(Math.min(ddActive + 1, its.length - 1)); return; }
+        if (e.key === 'ArrowUp'){ e.preventDefault(); setActive(Math.max(ddActive - 1, 0)); return; }
+        if (e.key === 'Escape'){ dd.hidden = true; ddActive = -1; return; }
+        if (e.key === 'Enter' && ddActive >= 0 && its[ddActive]){ e.preventDefault(); pick(its[ddActive].dataset.q); return; }
+      }
+      if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); doSearchSubmit(); }
+    });
     autoGrow(ta, 81, 240);
     // 快速 / 深度（选中项显示图标+文字，未选中项仅图标，hover 出释义）
     toolbarLeft.appendChild(seg(
@@ -5473,7 +5525,7 @@ window.papersToast = function(msg, type){
     const i = h.indexOf(q);
     if (i > -1) h.splice(i, 1);
     h.unshift(q);
-    if (h.length > 8) h.length = 8;
+    if (h.length > 20) h.length = 20;
   }
 
   submitBtn.addEventListener('click', () => {
@@ -6282,37 +6334,8 @@ window.papersToast = function(msg, type){
   function buildSearchBottom(){
     const wrap = document.createElement('div');
 
-    // 最近搜索：有检索记录时露出，最多 3 条，每条最多展示 10 个字符
-    if (state.search.history.length){
-      const clock = '<svg class="prc-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7 V12 L15.5 14"/></svg>';
-      const recent = document.createElement('div');
-      recent.className = 'papers-recent';
-      recent.innerHTML = '<span class="papers-recent-label">最近搜索</span>';
-      state.search.history.slice(0, 4).forEach(q => {
-        const chip = document.createElement('span');
-        chip.className = 'papers-recent-chip';
-        chip.title = q;
-        const disp = q.length > 10 ? q.slice(0, 10) + '…' : q;
-        chip.innerHTML = clock + '<span class="prc-text">' + esc(disp) + '</span>' +
-          '<button class="papers-recent-chip-x" type="button" aria-label="删除该搜索记录">' + IC.x + '</button>';
-        chip.addEventListener('click', () => {
-          // 点击仅回填到搜索框，待用户点发送再检索
-          state.search.text = q;
-          if (state.mode !== 'search') state.mode = 'search';
-          render();
-          const ta = inputArea.querySelector('textarea');
-          if (ta){ ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch(_){} }
-        });
-        chip.querySelector('.papers-recent-chip-x').addEventListener('click', e => {
-          e.stopPropagation();
-          const i = state.search.history.indexOf(q);
-          if (i > -1) state.search.history.splice(i, 1);
-          renderBottom();
-        });
-        recent.appendChild(chip);
-      });
-      wrap.appendChild(recent);
-    }
+    // 最近搜索改由搜索框聚焦下拉调取（见 renderSearch），底区不再常驻该行
+    wrap.style.marginTop = '20px';
 
     const head = document.createElement('div');
     head.className = 'papers-bottom-head';
