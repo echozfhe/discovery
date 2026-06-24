@@ -2928,6 +2928,9 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <!-- Three.js for Earth 3D globe -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+<!-- KaTeX：原子块原型中渲染行间公式 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 
 <style>
   /* === 导航方案演示：课题列表 / 纯导航用户栏（复用仓库设计语言） === */
@@ -3096,6 +3099,34 @@
   mark.rd-hl{ background:rgba(214,158,46,.26); border-radius:2px; padding:.5px 0; box-shadow:0 1px 0 rgba(176,123,58,.45); cursor:pointer; transition:background .18s; }
   mark.rd-hl:hover{ background:rgba(214,158,46,.4); }
   mark.rd-hl.flash{ background:rgba(21,84,168,.32); box-shadow:0 1px 0 rgba(21,84,168,.5); }
+  /* ===== 原子块（公式 / 表格）：hover 亮块 + 浮层。块内禁用文本选区，复制读源串 ===== */
+  .rd-atom{ position:relative; border-radius:8px; margin:14px 0; padding:10px 12px; user-select:none; -webkit-user-select:none; cursor:default; transition:background .15s, box-shadow .15s; }
+  .rd-atom-formula{ text-align:center; overflow-x:auto; }
+  .rd-atom-table{ overflow-x:auto; }
+  .rd-atom:hover{ background:rgba(21,84,168,.06); box-shadow:0 0 0 1px rgba(21,84,168,.2) inset; }
+  .rd-atom.flash{ background:rgba(21,84,168,.14); box-shadow:0 0 0 2px rgba(21,84,168,.45) inset; }
+  .rd-atom-raw{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); white-space:pre-wrap; }
+  .rd-atom-table table{ border-collapse:collapse; margin:0 auto; font-size:12.5px; }
+  .rd-atom-table th, .rd-atom-table td{ border:1px solid var(--line); padding:5px 14px; text-align:center; color:var(--ink-soft); }
+  .rd-atom-table th{ background:var(--bg-soft); color:var(--ink); font-weight:600; }
+  .rd-atom-cap{ margin-top:7px; text-align:center; font-size:11.5px; color:var(--muted); }
+  .rd-atom .katex-display{ margin:0; }
+  /* 原子块浮层 */
+  .rd-atomtool{ position:fixed; z-index:60; display:none; align-items:center; gap:1px; padding:4px; background:var(--paper); border:1px solid var(--line); border-radius:11px; box-shadow:0 12px 32px -8px rgba(26,35,50,.3); }
+  .rd-atomtool.show{ display:flex; }
+  .rd-at-btn{ display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border:none; background:none; border-radius:7px; font-size:12.5px; color:var(--ink-soft); cursor:pointer; font-family:var(--sans); white-space:nowrap; transition:background .12s, color .12s; }
+  .rd-at-btn:hover{ background:var(--bg-soft); color:var(--accent); }
+  .rd-at-btn svg{ width:14px; height:14px; }
+  .rd-at-sep{ width:1px; height:18px; background:var(--line-soft); margin:0 3px; }
+  /* 复制 + 下拉（LaTeX / Markdown） */
+  .rd-at-copywrap{ position:relative; display:inline-flex; }
+  .rd-at-copy .rd-at-caret{ width:12px; height:12px; opacity:.55; margin-left:1px; transition:transform .15s; }
+  .rd-at-copy.open .rd-at-caret{ transform:rotate(180deg); }
+  .rd-at-menu{ position:absolute; top:calc(100% + 5px); right:0; min-width:128px; background:var(--paper); border:1px solid var(--line); border-radius:9px; box-shadow:0 12px 30px -8px rgba(26,35,50,.3); padding:4px; z-index:1; }
+  .rd-at-menu[hidden]{ display:none; }
+  .rd-at-mi{ display:flex; align-items:center; gap:7px; width:100%; padding:7px 11px; border:none; background:none; border-radius:6px; font-size:12.5px; color:var(--ink-soft); cursor:pointer; font-family:var(--sans); text-align:left; white-space:nowrap; }
+  .rd-at-mi:hover{ background:var(--bg-soft); color:var(--accent); }
+  .rd-at-mi .rd-at-mi-tag{ font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; }
 
   /* 选区浮动工具条 */
   .rd-seltool{ position:fixed; z-index:240; display:none; align-items:center; gap:2px; padding:5px; background:var(--ink); border-radius:11px; box-shadow:0 10px 30px rgba(26,35,50,.28), 0 0 0 1px rgba(0,0,0,.04); transform:translate(-50%,-6px); }
@@ -6730,9 +6761,11 @@ window.papersToast = function(msg, type){
     { t:'h2', en:'2 Method' },
     { t:'p', en:'We formalize the learning problem as a sequence-to-sequence mapping in which the target is decomposed into a chain of intermediate states. At each step the model is trained to predict the next state conditioned on the input and all previously generated states. Crucially, the decomposition is derived automatically from weak structural cues and requires no manual annotation.', zh:'我们将学习问题形式化为序列到序列的映射，其目标被分解为一连串中间状态。在每一步，模型以输入及此前已生成的全部状态为条件，预测下一个状态。关键在于，该分解由弱结构线索自动导出，无需任何人工标注。' },
     { t:'p', en:'To prevent the model from collapsing onto trivial shortcuts, we add a consistency regularizer that penalizes disagreement between the final prediction and the aggregated intermediate states. This term is cheap to compute and, as we show in our ablations, is responsible for a large fraction of the observed improvement.', zh:'为防止模型坍缩到平凡的捷径解，我们引入一致性正则项，对最终预测与聚合后的中间状态之间的分歧加以惩罚。该项计算开销很小，且如消融实验所示，观测到的提升中有很大一部分归功于它。' },
+    { t:'formula', label:'一致性正则项损失', tex:'\\mathcal{L} \\;=\\; \\mathcal{L}_{\\text{task}} \\;+\\; \\lambda \\sum_{t=1}^{T} \\big\\lVert \\hat{y}_t - \\bar{s}_t \\big\\rVert^2', md:'$$\\mathcal{L} = \\mathcal{L}_{\\text{task}} + \\lambda \\sum_{t=1}^{T} \\lVert \\hat{y}_t - \\bar{s}_t \\rVert^2$$' },
     { t:'h2', en:'3 Experiments' },
     { t:'p', en:'We evaluate on three benchmark families spanning arithmetic reasoning, symbolic manipulation, and scientific question answering. For every benchmark we compare against a strong baseline trained with the standard objective under an identical compute budget, ensuring that gains cannot be attributed to additional training resources.', zh:'我们在涵盖算术推理、符号操作与科学问答的三类基准上进行评估。对每个基准，我们都在完全相同的算力预算下，与采用标准目标训练的强基线进行对比，确保增益不能归因于额外的训练资源。' },
     { t:'p', en:'The results show consistent improvements across all model sizes, but the effect is markedly stronger for larger models, suggesting an emergent interaction between scale and structured supervision. On the hardest split, our method recovers more than half of the gap to human performance that the baseline leaves open.', zh:'结果表明，各种模型规模下均有一致提升，但该效应在更大模型上明显更强，暗示规模与结构化监督之间存在涌现式的相互作用。在最困难的划分上，我们的方法弥补了基线与人类表现之间逾一半的差距。' },
+    { t:'table', label:'三类基准上的主要结果', md:'| Benchmark | Baseline | Ours | Δ |\n| --- | --- | --- | --- |\n| Arithmetic | 71.2 | 78.9 | +7.7 |\n| Symbolic | 64.5 | 73.1 | +8.6 |\n| Science QA | 58.0 | 69.4 | +11.4 |', tex:'\\begin{tabular}{lccc}\n\\hline\nBenchmark & Baseline & Ours & $\\Delta$ \\\\\n\\hline\nArithmetic & 71.2 & 78.9 & +7.7 \\\\\nSymbolic & 64.5 & 73.1 & +8.6 \\\\\nScience QA & 58.0 & 69.4 & +11.4 \\\\\n\\hline\n\\end{tabular}', html:'<table><thead><tr><th>Benchmark</th><th>Baseline</th><th>Ours</th><th>Δ</th></tr></thead><tbody><tr><td>Arithmetic</td><td>71.2</td><td>78.9</td><td>+7.7</td></tr><tr><td>Symbolic</td><td>64.5</td><td>73.1</td><td>+8.6</td></tr><tr><td>Science QA</td><td>58.0</td><td>69.4</td><td>+11.4</td></tr></tbody></table>' },
     { t:'h2', en:'4 Conclusion' },
     { t:'p', en:'We have shown that carefully designed intermediate supervision can substantially improve the reasoning ability of large models without any change to their architecture or any increase in compute. We hope these findings encourage a shift in focus from sheer scale toward the structure of the learning signal itself.', zh:'我们表明，精心设计的中间监督能够在不改动模型结构、不增加算力的前提下，显著提升大模型的推理能力。我们希望这些发现能推动研究重心从单纯追求规模，转向学习信号本身的结构。' },
   ];
@@ -6918,7 +6951,18 @@ window.papersToast = function(msg, type){
 
   // ---- 论文内容模块（PDF原文 / 解析Markdown 双视图）----
   const RD_ABS = RD_BODY.find(b => b.t === 'abs');
-  const RD_SECS = (() => { const s = []; let cur = null; RD_BODY.forEach(b => { if (b.t === 'h2'){ cur = { title:b.en, ps:[] }; s.push(cur); } else if (b.t === 'p' && cur) cur.ps.push(b); }); return s; })();
+  // 保留块顺序（段落 / 公式 / 表格混排）
+  const RD_SECS = (() => { const s = []; let cur = null; RD_BODY.forEach(b => { if (b.t === 'h2'){ cur = { title:b.en, blocks:[] }; s.push(cur); } else if (cur && (b.t === 'p' || b.t === 'formula' || b.t === 'table')) cur.blocks.push(b); }); return s; })();
+  // 给每个原子块分配稳定锚点 id（PDF / MD 两视图共用，便于跳回）
+  (() => { let n = 0; RD_BODY.forEach(b => { if (b.t === 'formula' || b.t === 'table') b._aid = 'atom-' + (++n); }); })();
+  // 用 KaTeX 渲染行间公式；未加载时回退为源码
+  function katexRender(tex){ try { if (window.katex) return window.katex.renderToString(tex, { displayMode:true, throwOnError:false }); } catch(_){} return '<code class="rd-atom-raw">' + esc(tex) + '</code>'; }
+  // 原子块 HTML（公式 / 表格）：把 md、latex 源挂在 data-* 上，复制时读源而非读 DOM
+  function atomHTML(b){
+    const meta = ' data-atom="' + b.t + '" data-aid="' + b._aid + '" data-anchor="' + b._aid + '" data-md="' + esc(b.md || '') + '" data-tex="' + esc(b.tex || '') + '" data-label="' + esc(b.label || '') + '"';
+    if (b.t === 'formula') return '<div class="rd-atom rd-atom-formula"' + meta + '><div class="rd-atom-render">' + katexRender(b.tex) + '</div></div>';
+    return '<div class="rd-atom rd-atom-table"' + meta + '><div class="rd-atom-render">' + (b.html || '') + '</div>' + (b.label ? '<div class="rd-atom-cap">表 · ' + esc(b.label) + '</div>' : '') + '</div>';
+  }
   const RD_REFS = [
     'Wei J., Wang X., et al. Chain-of-thought prompting elicits reasoning in large language models. NeurIPS, 2022.',
     'Zelikman E., et al. STaR: Bootstrapping reasoning with reasoning. NeurIPS, 2022.',
@@ -6929,7 +6973,8 @@ window.papersToast = function(msg, type){
   ];
   const rdShortTitle = t => (t || '').length > 32 ? t.slice(0, 32) + '…' : (t || '');
   const rdPP = p => '<p class="rd-pp" data-zh="' + esc(p.zh) + '">' + esc(p.en) + '</p>';
-  const rdSec = s => '<div class="rd-pdf-sec">' + esc(s.title) + '</div>' + s.ps.map(rdPP).join('');
+  const rdBlock = b => (b.t === 'formula' || b.t === 'table') ? atomHTML(b) : rdPP(b);
+  const rdSec = s => '<div class="rd-pdf-sec">' + esc(s.title) + '</div>' + s.blocks.map(rdBlock).join('');
 
   function renderDoc(){ renderDocTabs(); renderDocView(); }
   function renderDocTabs(){
@@ -7047,6 +7092,7 @@ window.papersToast = function(msg, type){
     RD_BODY.forEach(b => {
       if (b.t === 'h2') h += '<div class="rd-md-h2">' + esc(b.en) + '</div>';
       else if (b.t === 'abs') h += '<div class="rd-md-abs">Abstract</div><p class="rd-mdp" data-zh="' + esc(b.zh) + '">' + esc(b.en) + '</p>';
+      else if (b.t === 'formula' || b.t === 'table') h += atomHTML(b);
       else h += '<p class="rd-mdp" data-zh="' + esc(b.zh) + '">' + esc(b.en) + '</p>';
     });
     rdDocViewEl.innerHTML = h + '</div>';
@@ -7097,7 +7143,8 @@ window.papersToast = function(msg, type){
     return id;
   }
   function flashAnchor(id){
-    const m = rdDocViewEl.querySelector('mark[data-anchor="' + id + '"]');
+    // 划线 mark 与原子块（公式 / 表格）都可作为锚点
+    const m = rdDocViewEl.querySelector('mark[data-anchor="' + id + '"], .rd-atom[data-anchor="' + id + '"]');
     if (!m) return;
     m.scrollIntoView({ behavior:'smooth', block:'center' });
     m.classList.add('flash');
@@ -7115,6 +7162,71 @@ window.papersToast = function(msg, type){
       hideSelTool();
     });
   });
+
+  // ===== 原子块（公式 / 表格）hover 浮层：复用划词功能（笔记 / 翻译 / 问 AI），复制拆为 LaTeX / Markdown =====
+  const ATIC = {
+    note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3 H15 L19 7 V21 H6 Z"/><path d="M15 3 V7 H19"/><path d="M9 12 H15 M9 16 H13"/></svg>',
+    translate:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5 H13 M8.5 5 V4 M6 8 C6 11 8.5 13 11 13 M11 8 C11 11 7.5 14 4 14"/><path d="M13 20 L17 11 L21 20 M14.5 17 H19.5"/></svg>',
+    ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L13.4 9 L19 10.4 L13.4 11.8 L12 18 L10.6 11.8 L5 10.4 L10.6 9 Z"/></svg>',
+    copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15 V5 A2 2 0 0 1 7 3 H15"/></svg>',
+    caret:'<svg class="rd-at-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9 L12 15 L18 9"/></svg>'
+  };
+  const rdAtomTool = rdEl('<div class="rd-atomtool" id="rd-atomtool">' +
+    '<button class="rd-at-btn" data-a="note" type="button">' + ATIC.note + '<span>笔记</span></button>' +
+    '<button class="rd-at-btn" data-a="translate" type="button">' + ATIC.translate + '<span>翻译</span></button>' +
+    '<button class="rd-at-btn" data-a="ask" type="button">' + ATIC.ask + '<span>问 AI</span></button>' +
+    '<span class="rd-at-sep"></span>' +
+    '<div class="rd-at-copywrap">' +
+      '<button class="rd-at-btn rd-at-copy" data-a="copy" type="button">' + ATIC.copy + '<span>复制</span>' + ATIC.caret + '</button>' +
+      '<div class="rd-at-menu" hidden>' +
+        '<button class="rd-at-mi" data-fmt="tex" type="button">复制 LaTeX<span class="rd-at-mi-tag">.tex</span></button>' +
+        '<button class="rd-at-mi" data-fmt="md" type="button">复制 Markdown<span class="rd-at-mi-tag">.md</span></button>' +
+      '</div>' +
+    '</div>' +
+    '</div>');
+  rdOverlay.appendChild(rdAtomTool);
+  const atomMenu = rdAtomTool.querySelector('.rd-at-menu');
+  const atomCopyBtn = rdAtomTool.querySelector('.rd-at-copy');
+  function closeAtomMenu(){ atomMenu.hidden = true; atomCopyBtn.classList.remove('open'); }
+  let atomCur = null, atomHideT = null;
+  function showAtomTool(atom){
+    if (!window.getSelection().isCollapsed) return;   // 用户正在划词 → 不弹块浮层，避免冲突
+    clearTimeout(atomHideT);
+    atomCur = atom;
+    rdAtomTool.classList.add('show');
+    const r = atom.getBoundingClientRect(), tw = rdAtomTool.offsetWidth, th = rdAtomTool.offsetHeight;
+    let top = r.top - th - 8; if (top < 8) top = r.bottom + 8;
+    let left = r.right - tw; if (left < 8) left = 8;
+    rdAtomTool.style.top = top + 'px'; rdAtomTool.style.left = left + 'px';
+  }
+  function hideAtomTool(){ rdAtomTool.classList.remove('show'); closeAtomMenu(); atomCur = null; }
+  function scheduleHideAtom(){ clearTimeout(atomHideT); atomHideT = setTimeout(hideAtomTool, 140); }
+  rdDocViewEl.addEventListener('mouseover', e => { const a = e.target.closest('.rd-atom'); if (a) showAtomTool(a); });
+  rdDocViewEl.addEventListener('mouseout', e => { const a = e.target.closest('.rd-atom'); if (a && !a.contains(e.relatedTarget) && e.relatedTarget !== rdAtomTool && !rdAtomTool.contains(e.relatedTarget)) scheduleHideAtom(); });
+  rdAtomTool.addEventListener('mouseenter', () => clearTimeout(atomHideT));
+  rdAtomTool.addEventListener('mouseleave', scheduleHideAtom);
+  rdDocViewEl.addEventListener('scroll', hideAtomTool, true);
+  rdAtomTool.querySelectorAll('.rd-at-btn').forEach(btn => btn.addEventListener('click', e => {
+    if (!atomCur) return;
+    const act = btn.dataset.a;
+    // 复制按钮：仅开合下拉，不直接复制（在下拉里选 LaTeX / Markdown）
+    if (act === 'copy'){ e.stopPropagation(); const willOpen = atomMenu.hidden; closeAtomMenu(); if (willOpen){ atomMenu.hidden = false; atomCopyBtn.classList.add('open'); } return; }
+    const a = atomCur, md = a.dataset.md, tex = a.dataset.tex, aid = a.dataset.aid, label = a.dataset.label, kind = a.dataset.atom;
+    const name = (kind === 'formula' ? '公式' : '表格') + (label ? (' · ' + label) : '');
+    const src = kind === 'formula' ? tex : md;
+    if (act === 'ask'){ setAskRef(name + '\n' + src, aid); }
+    else if (act === 'note'){ openNotePop(name, aid, a.getBoundingClientRect()); }
+    else if (act === 'translate'){ doTranslate(name + '：\n' + src, '（' + (kind === 'formula' ? '该公式' : '该表格') + '的中文解读，原型示意）'); }
+    hideAtomTool();
+  }));
+  // 复制下拉项：LaTeX / Markdown，均读源串
+  atomMenu.querySelectorAll('.rd-at-mi').forEach(mi => mi.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!atomCur) return;
+    if (mi.dataset.fmt === 'tex'){ rdCopy(atomCur.dataset.tex); rdToast('已复制 LaTeX'); }
+    else { rdCopy(atomCur.dataset.md); rdToast('已复制 Markdown'); }
+    hideAtomTool();
+  }));
 
   function rdCopy(text){
     try { navigator.clipboard.writeText(text); }
